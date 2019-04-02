@@ -1,0 +1,25 @@
+<?php
+/**
+ * Install taxonomy_import
+ */
+
+/**
+ * Implements hook_install()
+ * Adds counties in iowa taxonomy
+ */
+function taxonomy_import_install() {
+  $create = \Drupal::config('taxonomy_import.settings')->get('auto_create_counties_in_iowa');
+  $vocabs = \Drupal\taxonomy\Entity\Vocabulary::loadMultiple();
+  $path = DRUPAL_ROOT . '/' . drupal_get_path('module', 'taxonomy_import') . '/src/data/IowaCounties.txt';
+  $vid = 'counties-in-iowa';
+  $name = 'Counties in Iowa';
+  if ($create && !isset($vocabs[$vid])) {
+    $vocab = \Drupal\taxonomy\Entity\Vocabulary::create(array(
+      'vid' => $vid,
+      'description' => '',
+      'name' => $name,
+    ));
+    $vocab->save();
+  }
+  \Drupal\taxonomy_import\Form\ImportForm::loadVocabFromFile($path, $vid, $name);
+}

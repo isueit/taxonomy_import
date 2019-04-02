@@ -1,0 +1,3 @@
+import taxonomy entity:
+  title: 'Import Taxonomy Entity'
+  restrict access: TRUE

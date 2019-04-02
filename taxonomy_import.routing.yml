@@ -1,0 +1,8 @@
+#Settings Form
+taxonomy_import.import:
+  path: 'admin/structure/taxonomy_import'
+  defaults:
+    _form: '\Drupal\taxonomy_import\Form\ImportForm'
+    _title: 'Create taxonomy from File'
+  requirements:
+    _permission: 'import taxonomy entity'
