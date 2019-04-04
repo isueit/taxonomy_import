@@ -26,13 +26,10 @@ class ImportForm extends FormBase {
         'description' => $desc,
         'name' => $name,
       ));
-      $status = $vocab->save();
-      if ($status == SAVED_UPDATED) {
-        drupal_set_message($this->t('The Taxonomy Vocabulary %vocab has been created.', ['%vocab' => $name]));
-        ImportForm::loadVocabFromFile($path, $vid, $name);
-      } else {
-        drupal_set_message($this->t('The Taxonomy Vocabulary %vocab failed to be created.', ['%vocab' => $name]));
-      }
+      $vocab->save();
+
+      drupal_set_message($this->t('The Taxonomy Vocabulary %vocab has been created.', ['%vocab' => $name]));
+      ImportForm::loadVocabFromFile($path, $vid, $name);
 
     } else {
       drupal_set_message($this->t('The Taxonomy Vocabulary %vocab already exists, checking for additional terms...', ['%vocab' => $name]));
@@ -54,6 +51,10 @@ class ImportForm extends FormBase {
       '#default_value' => '',
       '#max_length' => 255,
       '#machine_name' => array(
+        'exists' => array(
+          $this,
+          'exists',
+        ),
         'source' => array('taxonomy_name'),
         'replace_pattern' => '[^a-z0-9-]+',
         'replace' => '-',
@@ -115,18 +116,17 @@ class ImportForm extends FormBase {
           $count_skipped += 1;
         }
       }
-      if (debug_backtrace()[1]['function'] != 'taxonomy_import_install') {
+      //Only use $this when in the form
+      if (debug_backtrace()[1]['function'] == 'submitForm') {
         drupal_set_message($this->t('The Taxonomy Vocabulary %vocab added %added terms and skipped %skipped terms.', ['%vocab' => $name, '%added' => $count_added, '%skipped' => $count_skipped]));
       }
     }
   }
 
-  function taxonExists($name) {
-    $vocabs = \Drupal\taxonomy\Entity\Vocabulary::loadMultiple();
-    if (isset($vocabs[$vid])) {
-      return true;
-    } else {
-      return false;
-    }
+  /**
+   * Allow any machine name, import more terms to existing
+   */
+  function exists($name) {
+    return false;
   }
 }
