@@ -18,7 +18,17 @@ class ImportForm extends FormBase {
     $name = $form_state->getValue('taxonomy_name');
     $vid = $form_state->getValue('machine_name');
     $desc = $form_state->getValue('description');
-    $path = ImportForm::getFilePath($form_state->getValue('filename'));
+    debug($form_state->getValue('file'));
+    debug($form_state->getValue('filename'));
+    if ($form_state->getValue('filename') != "") {
+      $path = ImportForm::getFilePath($form_state->getValue('filename'));
+    } elseif ($form_state->getValue('file') != NULL) {
+      $file = file_save_upload('file', ['file_validate_extensions' => array('txt')], FALSE, NULL, FILE_EXISTS_REPLACE);
+      debug($file);
+      debug($file->uri);
+      $path = $file->uri;
+    }
+
     $vocabs = \Drupal\taxonomy\Entity\Vocabulary::loadMultiple();
     if (!isset($vocabs[$vid]) && !is_null($path)) {
       $vocab = \Drupal\taxonomy\Entity\Vocabulary::create(array(
@@ -35,6 +45,7 @@ class ImportForm extends FormBase {
       drupal_set_message($this->t('The Taxonomy Vocabulary %vocab already exists, checking for additional terms...', ['%vocab' => $name]));
       ImportForm::loadVocabFromFile($path, $vid, $name);
     }
+    file_delete($file);
   }
 
   public function buildForm(array $form, FormStateInterface $form_state) {
@@ -66,14 +77,22 @@ class ImportForm extends FormBase {
       '#size' => 60,
       '#maxlength' => 255,
     );
+    $dir = DRUPAL_ROOT . '/' . drupal_get_path('module', 'taxonomy_import') . '/src/data/';
+    $files = file_scan_directory($dir, '/.txt/');
+    $options = array('' => $this->t('Upload File Below'));
+    foreach ($files as $file) {
+      $options[$file->filename] = $file->filename;
+    }
     $form['filename'] = array(
-      '#type' => 'textfield',
+      '#type' => 'select',
       '#title' => t('Filename'),
-      '#description' => t('Filename to create terms from, one element per line, working directory is taxonomy_import/src/data'),
-      '#default_value' => 'IowaCounties.txt',
-      '#size' => 60,
-      '#maxlength' => 128,
-      '#required' => TRUE,
+      '#description' => t('Choose file from module or upload a file'),
+      '#options' => $options,
+    );
+    $form['file'] = array(
+      '#type' => 'file',
+      '#title' => t('File'),
+      '#description' => t('Uploaded a file to generate taxonomy'),
     );
     $form['submit'] = array(
       '#type' => 'submit',
@@ -87,12 +106,13 @@ class ImportForm extends FormBase {
     if (!file_exists($path)) {
       $form_state->setErrorByName('filename', t('Error: File not Found'));
     }
+    //if ($form_state->getValues('filename') == "" && $form_state->)
   }
 
   function getFilePath($filename) {
     $path = $filename;
     if (substr($filename, 0, 1) != '/') {
-      return DRUPAL_ROOT . '/' . drupal_get_path('module', 'taxonomy_import') . '/src/data' . '/' . $filename;
+      return DRUPAL_ROOT . '/' . drupal_get_path('module', 'taxonomy_import') . '/src/data/' . $filename;
     } else {
       return $filename;
     }
@@ -102,11 +122,15 @@ class ImportForm extends FormBase {
     if($file = fopen($path, 'r')) {
       $count_added = 0;
       $count_skipped = 0;
+      $tids_array = array();
       while(!feof($file)) {
-        $term = trim(fgets($file));
+        $term = fgets($file);
+        $tabs = strspn($term, '\t');
+        $term = trim($term);
         $query = \Drupal::entityQuery('taxonomy_term')->condition('vid', $vid)->condition('name', $term)->execute();
         if (count($query) < 1 && $term != NULL) {
           $term = \Drupal\taxonomy\Entity\Term::create([
+            //'parent' => $parents,
             'vid' => $vid,
             'name' => $term,
           ]);
