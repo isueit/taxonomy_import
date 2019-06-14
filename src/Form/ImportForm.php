@@ -3,6 +3,7 @@ namespace Drupal\taxonomy_import\Form;
 
 use Drupal\Core\Form\FormBase;
 use Drupal\Core\Form\FormStateInterface;
+use Drupal\file\Entity\File;
 
 /**
  * Class ImportForm
@@ -18,15 +19,19 @@ class ImportForm extends FormBase {
     $name = $form_state->getValue('taxonomy_name');
     $vid = $form_state->getValue('machine_name');
     $desc = $form_state->getValue('description');
-    debug($form_state->getValue('file'));
-    debug($form_state->getValue('filename'));
-    if ($form_state->getValue('filename') != "") {
+    if ($form_state->getValue('filename') != '') {
       $path = ImportForm::getFilePath($form_state->getValue('filename'));
-    } elseif ($form_state->getValue('file') != NULL) {
-      $file = file_save_upload('file', ['file_validate_extensions' => array('txt')], FALSE, NULL, FILE_EXISTS_REPLACE);
-      debug($file);
-      debug($file->uri);
-      $path = $file->uri;
+    } else {
+      $form_file = $form_state->getValue('file', 0);
+      if (isset($form_file[0]) && !empty($form_file[0])) {
+        $file = File::load($form_file[0]);
+        $uri = $file->getFileUri();
+        $stream_wrapper_manager = \Drupal::service('stream_wrapper_manager')->getViaUri($uri);
+        $path = $stream_wrapper_manager->realpath();
+      }
+    }
+    if (!isset($path) && !isset($file)) {
+      $path = NULL;
     }
 
     $vocabs = \Drupal\taxonomy\Entity\Vocabulary::loadMultiple();
@@ -45,7 +50,10 @@ class ImportForm extends FormBase {
       drupal_set_message($this->t('The Taxonomy Vocabulary %vocab already exists, checking for additional terms...', ['%vocab' => $name]));
       ImportForm::loadVocabFromFile($path, $vid, $name);
     }
-    file_delete($file);
+    if (isset($file) && $file) {
+      $file->delete();
+    }
+
   }
 
   public function buildForm(array $form, FormStateInterface $form_state) {
@@ -90,9 +98,13 @@ class ImportForm extends FormBase {
       '#options' => $options,
     );
     $form['file'] = array(
-      '#type' => 'file',
+      '#type' => 'managed_file',
       '#title' => t('File'),
       '#description' => t('Uploaded a file to generate taxonomy'),
+      '#upload_location' => 'temporary://',
+      '#upload_validators' => [
+        'file_validate_extensions' => ['txt'],
+        ],
     );
     $form['submit'] = array(
       '#type' => 'submit',
@@ -106,7 +118,11 @@ class ImportForm extends FormBase {
     if (!file_exists($path)) {
       $form_state->setErrorByName('filename', t('Error: File not Found'));
     }
-    //if ($form_state->getValues('filename') == "" && $form_state->)
+    $form_file = $form_state->getValue('file', 0);
+    $file = $form_state->getValues('file');
+    if (isset($form_file[0]) && !empty($form_file[0]) && $form_state->getValue('filename') == '') {
+      $form_state->setErrorByName('filename', t('Error: Please select a file or choose one to upload'));
+    }
   }
 
   function getFilePath($filename) {
@@ -119,32 +135,51 @@ class ImportForm extends FormBase {
   }
 
   function loadVocabFromFile($path, $vid, $name) {
-    if($file = fopen($path, 'r')) {
+    if ($file = fopen($path, 'r')) {
       $count_added = 0;
       $count_skipped = 0;
+      $count_blank = 0;
       $tids_array = array();
-      while(!feof($file)) {
+      while (!feof($file)) {
         $term = fgets($file);
-        $tabs = strspn($term, '\t');
+        $tabs = strspn($term, " ")/2; #Gives double the actual number of tabs
         $term = trim($term);
         $query = \Drupal::entityQuery('taxonomy_term')->condition('vid', $vid)->condition('name', $term)->execute();
-        if (count($query) < 1 && $term != NULL) {
-          $term = \Drupal\taxonomy\Entity\Term::create([
-            //'parent' => $parents,
+        if (count($query) < 1 && $term != NULL && $term != "") {
+          $create_arr = array(
             'vid' => $vid,
             'name' => $term,
-          ]);
+          );
+          if (!empty($tids_array)) {
+            $last = array_keys($tids_array)[count($tids_array)-1];
+            $last_tabs = $tids_array[$last];
+            if ($tabs > $last_tabs) {
+              $create_arr['parent'] = $last;
+            } elseif ($tabs <= $last_tabs) {
+              while ($tids_array[array_keys($tids_array)[count($tids_array)-1]] >= $tabs) {
+                array_pop($tids_array);
+              }
+              $last = array_keys($tids_array)[count($tids_array)-1];
+              $create_arr['parent'] = $last;
+            }
+          }
+          $term = \Drupal\taxonomy\Entity\Term::create($create_arr);
           $term->save();
+          $tids_array[$term->id()] = $tabs;
           $count_added += 1;
-        } else if ($term != NULL) {
+        } elseif ($term != NULL && $term != "") {
           $count_skipped += 1;
+        } elseif (!$term || $term == "") {
+          $count_blank += 1;
         }
       }
       //Only use $this when in the form
       if (debug_backtrace()[1]['function'] == 'submitForm') {
-        drupal_set_message($this->t('The Taxonomy Vocabulary %vocab added %added terms and skipped %skipped terms.', ['%vocab' => $name, '%added' => $count_added, '%skipped' => $count_skipped]));
+        drupal_set_message($this->t('The Taxonomy Vocabulary %vocab added %added terms, skipping %skipped terms and %blank lines.', ['%vocab' => $name, '%added' => $count_added, '%skipped' => $count_skipped, '%blank' => $count_blank]));
       }
+      fclose($file);
     }
+
   }
 
   /**

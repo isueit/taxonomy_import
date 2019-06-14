@@ -1,5 +1,5 @@
 taxonomy_import.admin.settings:
-  title: Taxonomy Import
+  title: 'Taxonomy Import'
   description: 'Import Taxonomy from File'
+  parent: entity.taxonomy_vocabulary.collection #TODO Add under taxonomy _taxonomy, _vocabulary don't work
   route_name: taxonomy_import.import
-  parent: system.admin_config_content
