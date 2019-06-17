@@ -47,8 +47,7 @@ class ImportForm extends FormBase {
       ImportForm::loadVocabFromFile($path, $vid, $name);
 
     } else {
-      drupal_set_message($this->t('The Taxonomy Vocabulary %vocab already exists, checking for additional terms...', ['%vocab' => $name]));
-      ImportForm::loadVocabFromFile($path, $vid, $name);
+      drupal_set_message($this->t('The Taxonomy Vocabulary using the machine name %name, please choose another machine name.', ['%name' => $vid]));
     }
     if (isset($file) && $file) {
       $file->delete();
@@ -144,8 +143,7 @@ class ImportForm extends FormBase {
         $term = fgets($file);
         $tabs = strspn($term, " ")/2; #Gives double the actual number of tabs
         $term = trim($term);
-        $query = \Drupal::entityQuery('taxonomy_term')->condition('vid', $vid)->condition('name', $term)->execute();
-        if (count($query) < 1 && $term != NULL && $term != "") {
+        if ($term != NULL && $term != "") {
           $create_arr = array(
             'vid' => $vid,
             'name' => $term,
