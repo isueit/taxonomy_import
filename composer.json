@@ -1,0 +1,5 @@
+{
+  "name": "isueit/taxonomy_import",
+  "type": "drupal-custom-module",
+  "description": "Create/Import taxonomy terms"
+}
