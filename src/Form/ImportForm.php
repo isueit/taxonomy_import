@@ -153,7 +153,7 @@ class ImportForm extends FormBase {
             $last_tabs = $tids_array[$last];
             if ($tabs > $last_tabs) {
               $create_arr['parent'] = $last;
-            } elseif ($tabs <= $last_tabs) {
+            } elseif (($tabs <= $last_tabs) && ($last_tabs != 0)) {
               while ($tids_array[array_keys($tids_array)[count($tids_array)-1]] >= $tabs) {
                 array_pop($tids_array);
               }
